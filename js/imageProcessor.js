@@ -30,11 +30,15 @@ export class ImageProcessor {
     const { data } = this.ctx.getImageData(0, 0, targetW, targetH);
 
     const gray = new Float32Array(targetW * targetH);
-    for (let i = 0; i < gray.length; i++) {
-      const r = data[i * 4]     / 255;
-      const g = data[i * 4 + 1] / 255;
-      const b = data[i * 4 + 2] / 255;
-      gray[i] = 0.2126 * r + 0.7152 * g + 0.0722 * b;
+    for (let yi = 0; yi < targetH; yi++) {
+      const srcYi = targetH - 1 - yi; // flip Y: canvas row 0 = image top, 3D y=0 = near edge
+      for (let xi = 0; xi < targetW; xi++) {
+        const src = (srcYi * targetW + xi) * 4;
+        const r = data[src]     / 255;
+        const g = data[src + 1] / 255;
+        const b = data[src + 2] / 255;
+        gray[yi * targetW + xi] = 0.2126 * r + 0.7152 * g + 0.0722 * b;
+      }
     }
 
     return this.applyCurves(gray, settings);
