@@ -5,7 +5,8 @@ import { Preview3D       } from './preview3d.js';
 import { FilamentEditor  } from './filamentEditor.js';
 
 const RESOLUTION_PPM = { draft: 1.5, standard: 2.5, fine: 4 };
-const MAX_GRID = 400;
+const MAX_GRID  = 400;
+const MAX_HISTORY = 10;
 
 class App {
   constructor() {
@@ -17,26 +18,28 @@ class App {
     this.filEditor = new FilamentEditor(
       document.getElementById('filament-editor'),
       () => this._onFilamentChange(),
+      () => this._saveSnapshot(),
     );
 
-    this._img    = null;
+    this._img     = null;
     this._heights = null;
-    this._gridW  = 0;
-    this._gridH  = 0;
-    this._aspect = 1;
+    this._gridW   = 0;
+    this._gridH   = 0;
+    this._aspect  = 1;
     this._debounce = null;
+    this._history  = [];
 
     this.settings = {
-      widthMm:    100,
-      heightMm:   100,
-      maxHeightMm: 3,
-      baseMm:     0.6,
-      resolution: 'standard',
-      gamma:      1,
-      brightness: 0,
-      contrast:   1,
-      invert:     false,
-      textureType: 'none',
+      widthMm:          100,
+      heightMm:         100,
+      maxHeightMm:      3,
+      baseMm:           0.6,
+      resolution:       'standard',
+      gamma:            1,
+      brightness:       0,
+      contrast:         1,
+      invert:           false,
+      textureType:      'none',
       textureIntensity: 0.3,
       textureScale:     0.2,
     };
@@ -45,12 +48,62 @@ class App {
     this._drawCurve();
   }
 
+  // ── History ─────────────────────────────────────────────────────────────────
+
+  _saveSnapshot() {
+    this._history.push({
+      settings:  { ...this.settings },
+      filaments: this.filEditor.get().map(f => ({ ...f })),
+    });
+    if (this._history.length > MAX_HISTORY) this._history.shift();
+    this._updateUndoBtn();
+  }
+
+  _undo() {
+    if (!this._history.length) return;
+    const snap = this._history.pop();
+    Object.assign(this.settings, snap.settings);
+    this._applySettingsToUI();
+    this.filEditor.setFilaments(snap.filaments);
+    this._reprocess();
+    this._updateUndoBtn();
+  }
+
+  _updateUndoBtn() {
+    const btn = document.getElementById('btn-undo');
+    if (!btn) return;
+    const n = this._history.length;
+    btn.disabled = n === 0;
+    btn.title    = n ? `Undo (${n} step${n > 1 ? 's' : ''} available)` : 'Nothing to undo';
+  }
+
+  _applySettingsToUI() {
+    this._setSlider('width-mm',          this.settings.widthMm);
+    this._setSlider('height-mm',         this.settings.heightMm);
+    this._setSlider('max-height-mm',     this.settings.maxHeightMm);
+    this._setSlider('base-mm',           this.settings.baseMm);
+    this._setSlider('gamma',             this.settings.gamma);
+    this._setSlider('brightness',        this.settings.brightness);
+    this._setSlider('contrast',          this.settings.contrast);
+    this._setSlider('texture-intensity', this.settings.textureIntensity);
+    this._setSlider('texture-scale',     this.settings.textureScale);
+
+    document.getElementById('invert').checked     = this.settings.invert;
+    document.getElementById('texture-type').value = this.settings.textureType;
+
+    document.querySelectorAll('input[name="resolution"]').forEach(r => {
+      r.checked = r.value === this.settings.resolution;
+    });
+
+    this._drawCurve();
+  }
+
   // ── Event binding ───────────────────────────────────────────────────────────
 
   _bindEvents() {
     // Dropzone
-    const dz   = document.getElementById('dropzone');
-    const fi   = document.getElementById('file-input');
+    const dz = document.getElementById('dropzone');
+    const fi = document.getElementById('file-input');
 
     dz.addEventListener('dragover',  e => { e.preventDefault(); dz.classList.add('drag-over'); });
     dz.addEventListener('dragleave', ()  => dz.classList.remove('drag-over'));
@@ -74,7 +127,7 @@ class App {
       });
     });
 
-    // Dimensions
+    // Dimensions (snapshot on mousedown = when user starts dragging)
     this._slider('width-mm', v => {
       this.settings.widthMm = v;
       if (document.getElementById('lock-aspect').checked) {
@@ -99,7 +152,11 @@ class App {
     this._slider('base-mm',       v => { this.settings.baseMm = v;      this._reprocess(); });
 
     document.querySelectorAll('input[name="resolution"]').forEach(r => {
-      r.addEventListener('change', e => { this.settings.resolution = e.target.value; this._reprocess(); });
+      r.addEventListener('change', e => {
+        this._saveSnapshot();
+        this.settings.resolution = e.target.value;
+        this._reprocess();
+      });
     });
 
     // Brightness
@@ -108,6 +165,7 @@ class App {
     this._slider('contrast',   v => { this.settings.contrast   = v; this._reprocess(); this._drawCurve(); });
 
     document.getElementById('invert').addEventListener('change', e => {
+      this._saveSnapshot();
       this.settings.invert = e.target.checked;
       this._reprocess();
       this._drawCurve();
@@ -115,11 +173,15 @@ class App {
 
     // Texture
     document.getElementById('texture-type').addEventListener('change', e => {
+      this._saveSnapshot();
       this.settings.textureType = e.target.value;
       this._reprocess();
     });
     this._slider('texture-intensity', v => { this.settings.textureIntensity = v; this._reprocess(); });
     this._slider('texture-scale',     v => { this.settings.textureScale     = v; this._reprocess(); });
+
+    // Undo
+    document.getElementById('btn-undo').addEventListener('click', () => this._undo());
 
     // Export
     document.getElementById('btn-export').addEventListener('click', () => this._export());
@@ -128,6 +190,8 @@ class App {
   _slider(id, fn) {
     const el = document.getElementById(id);
     if (!el) return;
+    // Save snapshot once when the user starts dragging
+    el.addEventListener('mousedown', () => this._saveSnapshot());
     el.addEventListener('input', e => {
       const v = parseFloat(e.target.value);
       const badge = document.getElementById(`${id}-val`);
@@ -141,7 +205,10 @@ class App {
     if (!el) return;
     el.value = val;
     const badge = document.getElementById(`${id}-val`);
-    if (badge) badge.textContent = val;
+    if (badge) {
+      const step = parseFloat(el.step || '1');
+      badge.textContent = Number.isInteger(step) ? val : (+val).toFixed(2);
+    }
   }
 
   // ── Image loading ───────────────────────────────────────────────────────────
@@ -151,14 +218,12 @@ class App {
       this._img    = await this.imgProc.loadImage(file);
       this._aspect = this.imgProc.aspectRatio;
 
-      // Sync height slider to image aspect
       const h = Math.round(this.settings.widthMm / this._aspect);
       this.settings.heightMm = h;
       this._setSlider('height-mm', h);
 
-      // Update dropzone UI
       const objUrl = URL.createObjectURL(file);
-      const dzc = document.getElementById('dropzone-content');
+      const dzc    = document.getElementById('dropzone-content');
       dzc.innerHTML = `
         <img src="${objUrl}" alt="Uploaded image" onload="URL.revokeObjectURL(this.src)" />
         <span>${file.name} &nbsp;<span style="color:#556;font-size:11px">${this.imgProc.originalWidth}&times;${this.imgProc.originalHeight}</span></span>
@@ -180,9 +245,9 @@ class App {
   _run() {
     if (!this._img) return;
 
-    const ppm  = RESOLUTION_PPM[this.settings.resolution] || 2.5;
-    let gW     = Math.round(this.settings.widthMm  * ppm) + 1;
-    let gH     = Math.round(this.settings.heightMm * ppm) + 1;
+    const ppm = RESOLUTION_PPM[this.settings.resolution] || 2.5;
+    let gW    = Math.round(this.settings.widthMm  * ppm) + 1;
+    let gH    = Math.round(this.settings.heightMm * ppm) + 1;
 
     if (gW > MAX_GRID || gH > MAX_GRID) {
       const s = MAX_GRID / Math.max(gW, gH);
@@ -245,13 +310,12 @@ class App {
 
     let cumZ = 0;
     filaments.forEach((f, i) => {
-      const startZ = cumZ;
-      // First filament includes the structural base
+      const startZ     = cumZ;
       const printThick = i === 0 ? this.settings.baseMm + f.thickness : f.thickness;
       cumZ += printThick;
 
-      const tr = document.createElement('tr');
-      const dot = `<span class="swap-dot" style="background:${f.color}"></span>`;
+      const tr     = document.createElement('tr');
+      const dot    = `<span class="swap-dot" style="background:${f.color}"></span>`;
       const action = i === 0
         ? '<span class="action-badge start">Start</span>'
         : `<span class="action-badge swap">Swap at ${startZ.toFixed(2)} mm</span>`;
@@ -286,7 +350,6 @@ class App {
       ctx.beginPath(); ctx.moveTo(0, i*h/4); ctx.lineTo(w, i*h/4); ctx.stroke();
     }
 
-    // Diagonal reference
     ctx.strokeStyle = '#2a2a50';
     ctx.lineWidth = 1;
     ctx.beginPath(); ctx.moveTo(0, h); ctx.lineTo(w, 0); ctx.stroke();

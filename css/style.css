@@ -35,6 +35,7 @@ body {
 header {
   display: flex;
   align-items: center;
+  justify-content: space-between;
   padding: 0 18px;
   background: var(--bg2);
   border-bottom: 1px solid var(--border);
@@ -51,6 +52,27 @@ header h1 {
 .tagline {
   font-size: 11px;
   color: var(--text2);
+}
+
+.btn-undo {
+  padding: 6px 14px;
+  background: none;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  color: var(--text2);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: border-color 0.15s, color 0.15s;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.btn-undo:hover:not(:disabled) { border-color: var(--accent); color: var(--accent); }
+
+.btn-undo:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
 }
 
 /* ── Dropzone ─────────────────────────────────── */

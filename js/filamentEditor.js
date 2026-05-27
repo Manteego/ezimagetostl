@@ -1,7 +1,8 @@
 export class FilamentEditor {
-  constructor(container, onChange) {
-    this.container = container;
-    this.onChange  = onChange;
+  constructor(container, onChange, onBeforeChange) {
+    this.container      = container;
+    this.onChange       = onChange;
+    this.onBeforeChange = onBeforeChange || (() => {});
     this.filaments = [
       { name: 'White (Base)',  color: '#f0f0f0', thickness: 0.6 },
       { name: 'Gray (Mid)',    color: '#7a7a7a', thickness: 0.4 },
@@ -12,6 +13,11 @@ export class FilamentEditor {
   }
 
   get() { return this.filaments; }
+
+  setFilaments(filaments) {
+    this.filaments = filaments.map(f => ({ ...f }));
+    this._render();
+  }
 
   _render() {
     this.container.innerHTML = '';
@@ -36,26 +42,35 @@ export class FilamentEditor {
         <button class="fil-del" title="Remove filament">&times;</button>
       `;
 
+      // Save snapshot when user starts picking a color (mousedown fires once)
+      row.querySelector('.fil-color').addEventListener('mousedown', () => this.onBeforeChange());
       row.querySelector('.fil-color').addEventListener('input', e => {
         this.filaments[i].color = e.target.value;
         this.onChange();
       });
+
       row.querySelector('.fil-name').addEventListener('input', e => {
         this.filaments[i].name = e.target.value;
       });
+
+      // Save snapshot when thickness field gains focus (one snapshot per edit session)
+      row.querySelector('.fil-thick').addEventListener('focus', () => this.onBeforeChange());
       row.querySelector('.fil-thick').addEventListener('input', e => {
         const v = parseFloat(e.target.value);
         if (v > 0) { this.filaments[i].thickness = v; this.onChange(); }
       });
+
       row.querySelector('.fil-del').addEventListener('click', () => {
         if (this.filaments.length <= 1) return;
+        this.onBeforeChange();
         this.filaments.splice(i, 1);
         this._render();
         this.onChange();
       });
 
-      // Drag reorder
+      // Drag reorder — snapshot on drag start
       row.addEventListener('dragstart', e => {
+        this.onBeforeChange();
         this._dragSrc = i;
         e.dataTransfer.effectAllowed = 'move';
         row.style.opacity = '0.5';
@@ -81,6 +96,7 @@ export class FilamentEditor {
     addBtn.className = 'btn-add-filament';
     addBtn.textContent = '+ Add Filament';
     addBtn.addEventListener('click', () => {
+      this.onBeforeChange();
       this.filaments.push({ name: 'New Filament', color: '#ff6600', thickness: 0.4 });
       this._render();
       this.onChange();
