@@ -9,7 +9,8 @@
   {
     "imports": {
       "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js",
-      "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/"
+      "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/",
+      "fflate": "https://cdn.jsdelivr.net/npm/fflate@0.8.2/esm/browser.js"
     }
   }
   </script>
@@ -191,7 +192,10 @@
             </tbody>
           </table>
         </div>
-        <button id="btn-export" class="btn-export" disabled>&#8595; Export STL</button>
+        <div class="export-buttons">
+          <button id="btn-export-stl" class="btn-export" disabled>&#8595; Export STL</button>
+          <button id="btn-export-3mf" class="btn-export btn-export-3mf" disabled>&#8595; Export 3MF <span class="badge-bambu">Bambu</span></button>
+        </div>
       </div>
     </section>
   </main>
