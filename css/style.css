@@ -565,16 +565,9 @@ select:focus { border-color: var(--accent); }
 .action-badge.start { background: #1a3a1a; color: #6adb6a; }
 .action-badge.swap { background: #3a2a1a; color: #ffaa44; }
 
-/* ── Export buttons ───────────────────────────── */
-.export-buttons {
-  display: flex;
-  flex-direction: column;
-  gap: 7px;
-  align-self: center;
-  flex-shrink: 0;
-}
-
+/* ── Export button ────────────────────────────── */
 .btn-export {
+  align-self: center;
   flex-shrink: 0;
   padding: 12px 22px;
   background: var(--accent);
@@ -590,22 +583,6 @@ select:focus { border-color: var(--accent); }
 
 .btn-export:hover:not(:disabled) { opacity: 0.9; transform: translateY(-1px); }
 .btn-export:active:not(:disabled) { transform: translateY(0); }
-
-.btn-export-3mf { background: #1a7a3a; }
-.btn-export-3mf:hover:not(:disabled) { background: #1e9044; opacity: 1; }
-
-.badge-bambu {
-  display: inline-block;
-  font-size: 9px;
-  font-weight: 800;
-  letter-spacing: 0.5px;
-  background: rgba(0,0,0,0.25);
-  padding: 1px 5px;
-  border-radius: 3px;
-  vertical-align: middle;
-  margin-left: 4px;
-  text-transform: uppercase;
-}
 
 .btn-export:disabled {
   background: var(--bg3);

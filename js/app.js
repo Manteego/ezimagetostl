@@ -1,7 +1,6 @@
 import { ImageProcessor  } from './imageProcessor.js';
 import { HeightMap       } from './heightMap.js';
 import { MeshGenerator   } from './meshGenerator.js';
-import { ThreeMfExporter } from './threeMfExporter.js';
 import { Preview3D       } from './preview3d.js';
 import { FilamentEditor  } from './filamentEditor.js';
 
@@ -13,7 +12,6 @@ class App {
     this.imgProc  = new ImageProcessor();
     this.hmap     = new HeightMap();
     this.meshGen  = new MeshGenerator();
-    this.threeMf  = new ThreeMfExporter();
     this.preview  = new Preview3D(document.getElementById('preview-container'));
 
     this.filEditor = new FilamentEditor(
@@ -124,8 +122,7 @@ class App {
     this._slider('texture-scale',     v => { this.settings.textureScale     = v; this._reprocess(); });
 
     // Export
-    document.getElementById('btn-export-stl').addEventListener('click', () => this._exportSTL());
-    document.getElementById('btn-export-3mf').addEventListener('click', () => this._export3MF());
+    document.getElementById('btn-export').addEventListener('click', () => this._export());
   }
 
   _slider(id, fn) {
@@ -224,8 +221,7 @@ class App {
     );
 
     this._updateSwapTable(filaments);
-    document.getElementById('btn-export-stl').disabled = false;
-    document.getElementById('btn-export-3mf').disabled = false;
+    document.getElementById('btn-export').disabled = false;
     document.getElementById('preview-placeholder').style.display = 'none';
   }
 
@@ -313,35 +309,13 @@ class App {
 
   // ── STL export ──────────────────────────────────────────────────────────────
 
-  _exportSTL() {
+  _export() {
     if (!this._heights) return;
     const buf = this.meshGen.generate(
       this._heights, this._gridW, this._gridH,
       this.settings.widthMm, this.settings.heightMm,
     );
     this.meshGen.download(buf, 'image3d.stl');
-  }
-
-  _export3MF() {
-    if (!this._heights) return;
-    const btn = document.getElementById('btn-export-3mf');
-    btn.disabled = true;
-    btn.textContent = 'Generating…';
-
-    // Defer to next frame so UI updates before the synchronous heavy work
-    setTimeout(() => {
-      try {
-        const zip = this.threeMf.generate(
-          this._heights, this._gridW, this._gridH,
-          this.settings.widthMm, this.settings.heightMm,
-          this.filEditor.get(), this.settings.baseMm,
-        );
-        this.threeMf.download(zip, 'image3d.3mf');
-      } finally {
-        btn.disabled = false;
-        btn.innerHTML = '&#8595; Export 3MF <span class="badge-bambu">Bambu</span>';
-      }
-    }, 20);
   }
 }
 
