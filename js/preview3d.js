@@ -122,9 +122,10 @@ export class Preview3D {
     this.mesh = new THREE.Mesh(geo, mat);
     this.scene.add(this.mesh);
 
-    // Orbit around the model center
+    // Start with a near-top-down view so the image faces the user
+    const span = Math.max(physW, physH);
     this.controls.target.set(physW / 2, physH / 2, 0);
-    this.camera.position.set(physW / 2, -physH * 0.9, physH * 0.8);
+    this.camera.position.set(physW / 2, physH / 2 - span * 0.25, span * 1.4);
     this.controls.update();
   }
 
