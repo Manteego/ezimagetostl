@@ -38,11 +38,10 @@
   <main>
     <aside class="controls">
       <nav class="tab-bar">
-        <button class="tab-btn active" data-tab="dimensions">Dimensions</button>
-        <button class="tab-btn" data-tab="brightness">Brightness</button>
+        <button class="tab-btn active" data-tab="dimensions">Size</button>
+        <button class="tab-btn" data-tab="brightness">Tone</button>
         <button class="tab-btn" data-tab="texture">Texture</button>
         <button class="tab-btn" data-tab="colors">Colors</button>
-        <button class="tab-btn" data-tab="filaments">Filaments</button>
       </nav>
 
       <!-- Dimensions -->
@@ -157,9 +156,8 @@
         </div>
       </div>
 
-      <!-- Colors -->
+      <!-- Colors + Filament stack -->
       <div id="panel-colors" class="tab-panel">
-        <p class="hint-text">Detects the photo's dominant colors, matches each to the closest library filament, and applies them to the print stack (ordered light&nbsp;&rarr;&nbsp;dark). The preview and swap table update to match.</p>
         <div class="control-group">
           <div class="label-row">
             <label for="color-count">Colors to detect</label>
@@ -179,11 +177,9 @@
         <div id="color-results">
           <p class="empty-hint">Upload an image to detect its colors.</p>
         </div>
-      </div>
 
-      <!-- Filaments -->
-      <div id="panel-filaments" class="tab-panel">
-        <p class="hint-text">Stack is printed bottom → top.<br/>Dark image areas expose the top filament.</p>
+        <h4 class="panel-subhead">Filament Stack</h4>
+        <p class="hint-text">Printed bottom&nbsp;&rarr;&nbsp;top; dark areas expose the top filament. Detected colors fill this in automatically&mdash;edit freely.</p>
         <div id="filament-editor"></div>
       </div>
     </aside>
