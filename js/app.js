@@ -3,10 +3,13 @@ import { HeightMap       } from './heightMap.js';
 import { MeshGenerator   } from './meshGenerator.js';
 import { Preview3D       } from './preview3d.js';
 import { FilamentEditor  } from './filamentEditor.js';
+import { ColorDetector   } from './colorDetector.js';
 
 const RESOLUTION_PPM = { draft: 1.5, standard: 2.5, fine: 4 };
 const MAX_GRID  = 400;
 const MAX_HISTORY = 10;
+
+const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
 
 class App {
   constructor() {
@@ -21,6 +24,8 @@ class App {
       () => this._saveSnapshot(),
     );
 
+    this.colorDet = new ColorDetector();
+
     this._img     = null;
     this._heights = null;
     this._gridW   = 0;
@@ -28,6 +33,8 @@ class App {
     this._aspect  = 1;
     this._debounce = null;
     this._history  = [];
+    this._detected   = null;
+    this._colorCount = 5;
 
     this.settings = {
       widthMm:          100,
@@ -42,7 +49,9 @@ class App {
       textureType:      'none',
       textureIntensity: 0.3,
       textureScale:     0.2,
+      fullColor:        false,
     };
+    this._coverage = null;
 
     this._bindEvents();
     this._drawCurve();
@@ -90,6 +99,12 @@ class App {
 
     document.getElementById('invert').checked     = this.settings.invert;
     document.getElementById('texture-type').value = this.settings.textureType;
+
+    const fc = document.getElementById('full-color');
+    if (fc) {
+      fc.checked = this.settings.fullColor;
+      document.getElementById('full-color-hint').style.display = this.settings.fullColor ? '' : 'none';
+    }
 
     document.querySelectorAll('input[name="resolution"]').forEach(r => {
       r.checked = r.value === this.settings.resolution;
@@ -171,6 +186,8 @@ class App {
       this._drawCurve();
     });
 
+    document.getElementById('btn-auto-enhance').addEventListener('click', () => this._autoEnhance());
+
     // Texture
     document.getElementById('texture-type').addEventListener('change', e => {
       this._saveSnapshot();
@@ -179,6 +196,21 @@ class App {
     });
     this._slider('texture-intensity', v => { this.settings.textureIntensity = v; this._reprocess(); });
     this._slider('texture-scale',     v => { this.settings.textureScale     = v; this._reprocess(); });
+
+    // Colors
+    const cc = document.getElementById('color-count');
+    cc.addEventListener('input', e => {
+      this._colorCount = parseInt(e.target.value, 10);
+      document.getElementById('color-count-val').textContent = this._colorCount;
+    });
+    cc.addEventListener('change', () => { if (this._img) this._detectColors(); });
+    document.getElementById('btn-detect').addEventListener('click', () => this._detectColors());
+
+    document.getElementById('full-color').addEventListener('change', e => {
+      this.settings.fullColor = e.target.checked;
+      document.getElementById('full-color-hint').style.display = e.target.checked ? '' : 'none';
+      this._reprocess();
+    });
 
     // Undo
     document.getElementById('btn-undo').addEventListener('click', () => this._undo());
@@ -229,11 +261,109 @@ class App {
         <span>${file.name} &nbsp;<span style="color:#556;font-size:11px">${this.imgProc.originalWidth}&times;${this.imgProc.originalHeight}</span></span>
       `;
 
-      this._reprocess();
+      document.getElementById('btn-detect').disabled = false;
+      document.getElementById('btn-auto-enhance').disabled = false;
+
+      // Make it look right immediately: auto-tune the tonal curve, then detect &
+      // apply the palette. Both feed a single (debounced) reprocess.
+      this._autoEnhance({ snapshot: false });
+      this._detectColors({ snapshot: false });
     } catch (err) {
       console.error('Image load failed:', err);
     }
   }
+
+  // ── Color detection ─────────────────────────────────────────────────────────
+
+  _detectColors({ snapshot = true } = {}) {
+    if (!this._img) return;
+    const { stack } = this.colorDet.analyze(this._img, this._colorCount);
+    this._detected = stack;
+    this._renderColorResults(stack);
+    if (!stack.length) return;
+    // Detection IS the recommendation — push it straight into the print stack so the
+    // 3D preview and Layer Swap table always match what the Colors tab shows.
+    if (snapshot) this._saveSnapshot();
+    this.filEditor.setFilaments(this._stackToFilaments(stack));
+    this._reprocess();
+  }
+
+  // Auto-levels: derive gamma/brightness/contrast from the image histogram so the
+  // relief uses the full tonal range with midtones centered — no manual sliders needed.
+  _autoEnhance({ snapshot = true } = {}) {
+    if (!this._img) return;
+    const { lo, hi, median } = this.imgProc.autoLevels(this._img);
+    const span = Math.max(0.02, hi - lo);
+
+    // Map [lo,hi] -> [0,1]:  contrast = 1/span,  brightness = 0.5 - (lo+hi)/2
+    const contrast   = clamp(1 / span, 0.1, 3);
+    const brightness = clamp(Math.round((0.5 - (lo + hi) / 2) * 100), -100, 100);
+    // Center the (stretched) median on 0.5 via gamma
+    const m     = clamp((median - lo) / span, 0.01, 0.99);
+    const gamma = clamp(Math.log(0.5) / Math.log(m), 0.3, 3);
+
+    if (snapshot) this._saveSnapshot();
+    this.settings.brightness = brightness;
+    this.settings.contrast   = Math.round(contrast * 20) / 20; // snap to 0.05 step
+    this.settings.gamma      = Math.round(gamma * 20) / 20;
+    this._applySettingsToUI();
+    this._reprocess();
+  }
+
+  // Full-color mode: color every grid cell by its nearest filament (real color).
+  _computeVertexColors(filaments) {
+    if (!this.settings.fullColor || !this.imgProc.rgbGrid) { this._coverage = null; return null; }
+    const { colors, counts } = this.colorDet.mapToFilaments(this.imgProc.rgbGrid, filaments);
+    this._coverage = counts;
+    return colors;
+  }
+
+  // Distribute the current max-height over the detected stack as per-filament thickness.
+  _stackToFilaments(stack) {
+    const n = stack.length || 1;
+    const per = Math.max(0.2, Math.round((this.settings.maxHeightMm / n) * 10) / 10);
+    return stack.map(s => ({ name: s.name, color: s.hex, thickness: per }));
+  }
+
+  _renderColorResults(stack) {
+    const box = document.getElementById('color-results');
+    if (!box) return;
+    if (!stack.length) {
+      box.innerHTML = '<p class="empty-hint">No colors detected.</p>';
+      return;
+    }
+
+    const fils = this._stackToFilaments(stack);
+    box.innerHTML = '';
+    let cumZ = 0;
+
+    stack.forEach((s, i) => {
+      const thick      = fils[i].thickness;
+      const startZ     = cumZ;
+      const printThick = i === 0 ? this.settings.baseMm + thick : thick;
+      cumZ += printThick;
+
+      const q = s.deltaE < 8 ? 'good' : s.deltaE < 20 ? 'ok' : 'poor';
+      const layer = i === 0
+        ? '<span class="layer-tag base">Base</span>'
+        : `<span class="layer-tag">Swap @ ${startZ.toFixed(1)}mm</span>`;
+
+      const row = document.createElement('div');
+      row.className = 'color-row';
+      row.innerHTML = `
+        <span class="color-swatch" style="background:${s.detectedHex}" title="Detected ${s.detectedHex}"></span>
+        <span class="arrow">&rarr;</span>
+        <span class="color-swatch" style="background:${s.hex}" title="Filament ${s.hex}"></span>
+        <span class="color-info">
+          <span class="fil-match">${s.name}</span>
+          <span class="match-meta"><span class="match-quality ${q}"></span>${Math.round(s.population * 100)}% of image &middot; &Delta;E ${s.deltaE.toFixed(1)}</span>
+        </span>
+        ${layer}
+      `;
+      box.appendChild(row);
+    });
+  }
+
 
   // ── Processing pipeline ─────────────────────────────────────────────────────
 
@@ -279,10 +409,11 @@ class App {
       textureScale:     this.settings.textureScale,
     });
 
+    const vertexColors = this._computeVertexColors(filaments);
     this.preview.update(
       this._heights, gW, gH,
       this.settings.widthMm, this.settings.heightMm,
-      filaments, this.settings.baseMm,
+      filaments, this.settings.baseMm, vertexColors,
     );
 
     this._updateSwapTable(filaments);
@@ -293,10 +424,11 @@ class App {
   _onFilamentChange() {
     if (!this._heights) return;
     const filaments = this.filEditor.get();
+    const vertexColors = this._computeVertexColors(filaments);
     this.preview.update(
       this._heights, this._gridW, this._gridH,
       this.settings.widthMm, this.settings.heightMm,
-      filaments, this.settings.baseMm,
+      filaments, this.settings.baseMm, vertexColors,
     );
     this._updateSwapTable(filaments);
   }
@@ -307,6 +439,24 @@ class App {
     const tbody = document.querySelector('#layer-swap-table tbody');
     if (!tbody) return;
     tbody.innerHTML = '';
+
+    // Full-color mode: no height swaps — show per-filament coverage for an AMS setup.
+    if (this.settings.fullColor) {
+      const total = (this._coverage || []).reduce((a, b) => a + b, 0) || 1;
+      filaments.forEach((f, i) => {
+        const pct = this._coverage ? Math.round(100 * this._coverage[i] / total) : 0;
+        const tr  = document.createElement('tr');
+        const dot = `<span class="swap-dot" style="background:${f.color}"></span>`;
+        tr.innerHTML = `
+          <td>${i + 1}</td>
+          <td>${dot}${f.name}</td>
+          <td colspan="2">${pct}% coverage</td>
+          <td><span class="action-badge swap">AMS slot ${i + 1}</span></td>
+        `;
+        tbody.appendChild(tr);
+      });
+      return;
+    }
 
     let cumZ = 0;
     filaments.forEach((f, i) => {

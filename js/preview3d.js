@@ -52,7 +52,7 @@ export class Preview3D {
     this.renderer.render(this.scene, this.camera);
   }
 
-  update(heights, gridW, gridH, physW, physH, filaments, baseMm) {
+  update(heights, gridW, gridH, physW, physH, filaments, baseMm, vertexColors = null) {
     if (this.mesh) {
       this.scene.remove(this.mesh);
       this.mesh.geometry.dispose();
@@ -90,10 +90,15 @@ export class Preview3D {
 
     for (let yi = 0; yi < gridH; yi++) {
       for (let xi = 0; xi < gridW; xi++) {
-        const z = Math.max(0.001, heights[yi * gridW + xi]);
+        const cell = yi * gridW + xi;
+        const z = Math.max(0.001, heights[cell]);
         pos.push(xi * dx, yi * dy, z);
-        const c = getColor(z);
-        colors.push(c.r, c.g, c.b);
+        if (vertexColors) {
+          colors.push(vertexColors[cell * 3], vertexColors[cell * 3 + 1], vertexColors[cell * 3 + 2]);
+        } else {
+          const c = getColor(z);
+          colors.push(c.r, c.g, c.b);
+        }
       }
     }
 

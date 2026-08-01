@@ -41,6 +41,7 @@
         <button class="tab-btn active" data-tab="dimensions">Dimensions</button>
         <button class="tab-btn" data-tab="brightness">Brightness</button>
         <button class="tab-btn" data-tab="texture">Texture</button>
+        <button class="tab-btn" data-tab="colors">Colors</button>
         <button class="tab-btn" data-tab="filaments">Filaments</button>
       </nav>
 
@@ -92,6 +93,7 @@
 
       <!-- Brightness -->
       <div id="panel-brightness" class="tab-panel">
+        <button id="btn-auto-enhance" class="btn-detect" disabled>&#10022; Auto-enhance</button>
         <div class="control-group">
           <div class="label-row">
             <label for="gamma">Gamma</label>
@@ -155,6 +157,30 @@
         </div>
       </div>
 
+      <!-- Colors -->
+      <div id="panel-colors" class="tab-panel">
+        <p class="hint-text">Detects the photo's dominant colors, matches each to the closest library filament, and applies them to the print stack (ordered light&nbsp;&rarr;&nbsp;dark). The preview and swap table update to match.</p>
+        <div class="control-group">
+          <div class="label-row">
+            <label for="color-count">Colors to detect</label>
+            <span class="val-badge"><span id="color-count-val">5</span></span>
+          </div>
+          <input type="range" id="color-count" min="2" max="8" value="5" step="1" />
+        </div>
+        <button id="btn-detect" class="btn-detect" disabled>Detect colors</button>
+        <div class="control-group toggle-row" style="margin-top:14px;">
+          <span>Full-color mode</span>
+          <label class="toggle-switch">
+            <input type="checkbox" id="full-color" />
+            <span class="toggle-track"><span class="toggle-thumb"></span></span>
+          </label>
+        </div>
+        <p class="hint-text" id="full-color-hint" style="display:none;">Colors each pixel by its nearest filament so the preview matches the photo. For AMS / multi-material printers &mdash; the swap-at-height table becomes a per-filament coverage legend.</p>
+        <div id="color-results">
+          <p class="empty-hint">Upload an image to detect its colors.</p>
+        </div>
+      </div>
+
       <!-- Filaments -->
       <div id="panel-filaments" class="tab-panel">
         <p class="hint-text">Stack is printed bottom → top.<br/>Dark image areas expose the top filament.</p>
@@ -197,6 +223,6 @@
     </section>
   </main>
 
-  <script type="module" src="js/app.js?v=2"></script>
+  <script type="module" src="js/app.js?v=5"></script>
 </body>
 </html>
