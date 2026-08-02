@@ -1,5 +1,5 @@
 export class HeightMap {
-  generate(grayscale, width, height, { baseMm, maxHeightMm, textureType, textureIntensity, textureScale }) {
+  generate(grayscale, width, height, { baseMm, maxHeightMm, textureType, textureIntensity, textureScale, smoothing = 0 }) {
     const heights = new Float32Array(width * height);
 
     for (let i = 0; i < grayscale.length; i++) {
@@ -11,6 +11,13 @@ export class HeightMap {
       this._applyTexture(heights, width, height, textureType, textureIntensity, textureScale);
     }
 
+    // Smooth the surface: softens pixel-scale steps and merges the tiny isolated
+    // peaks that otherwise become thousands of separate infill regions per layer,
+    // which is what makes slicers crawl on "generating infill regions".
+    if (smoothing > 0) {
+      this._smooth(heights, width, height, Math.round(smoothing));
+    }
+
     // Clamp to valid range
     const maxH = baseMm + maxHeightMm + textureIntensity;
     for (let i = 0; i < heights.length; i++) {
@@ -18,6 +25,29 @@ export class HeightMap {
     }
 
     return heights;
+  }
+
+  // Separable 3-tap box blur, `iterations` passes (approximates a Gaussian).
+  _smooth(heights, width, height, iterations) {
+    const tmp = new Float32Array(heights.length);
+    for (let it = 0; it < iterations; it++) {
+      for (let y = 0; y < height; y++) {
+        for (let x = 0; x < width; x++) {
+          const i = y * width + x;
+          const l = x > 0         ? heights[i - 1] : heights[i];
+          const r = x < width - 1 ? heights[i + 1] : heights[i];
+          tmp[i] = (l + heights[i] + r) / 3;
+        }
+      }
+      for (let y = 0; y < height; y++) {
+        for (let x = 0; x < width; x++) {
+          const i = y * width + x;
+          const u = y > 0          ? tmp[i - width] : tmp[i];
+          const d = y < height - 1 ? tmp[i + width] : tmp[i];
+          heights[i] = (u + tmp[i] + d) / 3;
+        }
+      }
+    }
   }
 
   _applyTexture(heights, width, height, type, intensity, scale) {

@@ -122,6 +122,14 @@
           </label>
         </div>
         <div class="control-group">
+          <div class="label-row">
+            <label for="smoothing">Smoothing</label>
+            <span class="val-badge"><span id="smoothing-val">1</span></span>
+          </div>
+          <input type="range" id="smoothing" min="0" max="4" value="1" step="1" />
+          <p class="hint-text" style="margin:6px 0 0;">Softens surface detail. Higher = smoother relief and much faster slicing (fewer infill regions).</p>
+        </div>
+        <div class="control-group">
           <label>Curve preview</label>
           <canvas id="curve-canvas" width="220" height="130"></canvas>
         </div>
@@ -173,7 +181,7 @@
             <span class="toggle-track"><span class="toggle-thumb"></span></span>
           </label>
         </div>
-        <p class="hint-text" id="full-color-hint" style="display:none;">Colors each pixel by its nearest filament so the preview matches the photo. For AMS / multi-material printers &mdash; the swap-at-height table becomes a per-filament coverage legend.</p>
+        <p class="hint-text" id="full-color-hint" style="display:none;">Colors each pixel by its nearest filament so the preview matches the photo. For AMS / multi-material printers. <strong>Note:</strong> a plain STL export is always height-based, so a height-swap print follows the tone preview&mdash;not this coloring.</p>
         <div id="color-results">
           <p class="empty-hint">Upload an image to detect its colors.</p>
         </div>
@@ -198,7 +206,10 @@
 
       <div class="bottom-panel">
         <div class="layer-swap-section">
-          <h3>Layer Swap Instructions</h3>
+          <div class="swap-header">
+            <h3>Layer Swap Instructions</h3>
+            <button id="btn-copy-swaps" class="btn-copy" disabled>Copy for Bambu</button>
+          </div>
           <table id="layer-swap-table">
             <thead>
               <tr>
@@ -219,6 +230,6 @@
     </section>
   </main>
 
-  <script type="module" src="js/app.js?v=5"></script>
+  <script type="module" src="js/app.js?v=8"></script>
 </body>
 </html>

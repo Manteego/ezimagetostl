@@ -8,7 +8,7 @@ export class MeshGenerator {
     const dy = physicalH / (gridH - 1);
 
     const topTris  = 2 * (gridW - 1) * (gridH - 1);
-    const botTris  = topTris;
+    const botTris  = 2; // flat bottom = one rectangle
     const sideTris = 4 * (gridW + gridH - 2);
     const total    = topTris + botTris + sideTris;
 
@@ -64,12 +64,13 @@ export class MeshGenerator {
     }
 
     // ── Bottom surface (flat, normal = -Z) ────────────────────────────────────
-    for (let yi = 0; yi < gridH - 1; yi++) {
-      for (let xi = 0; xi < gridW - 1; xi++) {
-        const x0 = xi*dx, y0 = yi*dy, x1 = (xi+1)*dx, y1 = (yi+1)*dy;
-        tri(0,0,-1, x0,y0,0, x1,y1,0, x1,y0,0);
-        tri(0,0,-1, x0,y0,0, x0,y1,0, x1,y1,0);
-      }
+    // The bottom is a single flat rectangle, so two triangles suffice instead of a
+    // full grid. Its edges are coplanar with the side-wall bottoms at z=0, so the
+    // resulting T-junctions don't affect any slice plane above z=0.
+    {
+      const X = (gridW - 1) * dx, Y = (gridH - 1) * dy;
+      tri(0,0,-1, 0,0,0, X,Y,0, X,0,0);
+      tri(0,0,-1, 0,0,0, 0,Y,0, X,Y,0);
     }
 
     // ── Front wall (yi=0, normal = -Y) ────────────────────────────────────────

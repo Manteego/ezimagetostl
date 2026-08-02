@@ -6,7 +6,10 @@ import { FilamentEditor  } from './filamentEditor.js';
 import { ColorDetector   } from './colorDetector.js';
 
 const RESOLUTION_PPM = { draft: 1.5, standard: 2.5, fine: 4 };
-const MAX_GRID  = 400;
+// Cap the grid per side. 400 produced ~640k-triangle meshes that choke slicers on
+// large prints (at 255mm every resolution saturated the old cap). 256/side keeps the
+// exported STL near ~130k triangles — plenty of detail for a lithophane, fast to slice.
+const MAX_GRID  = 256;
 const MAX_HISTORY = 10;
 
 const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
@@ -46,6 +49,7 @@ class App {
       brightness:       0,
       contrast:         1,
       invert:           false,
+      smoothing:        1,
       textureType:      'none',
       textureIntensity: 0.3,
       textureScale:     0.2,
@@ -94,6 +98,7 @@ class App {
     this._setSlider('gamma',             this.settings.gamma);
     this._setSlider('brightness',        this.settings.brightness);
     this._setSlider('contrast',          this.settings.contrast);
+    this._setSlider('smoothing',         this.settings.smoothing);
     this._setSlider('texture-intensity', this.settings.textureIntensity);
     this._setSlider('texture-scale',     this.settings.textureScale);
 
@@ -186,6 +191,8 @@ class App {
       this._drawCurve();
     });
 
+    this._slider('smoothing', v => { this.settings.smoothing = v; this._reprocess(); });
+
     document.getElementById('btn-auto-enhance').addEventListener('click', () => this._autoEnhance());
 
     // Texture
@@ -217,6 +224,7 @@ class App {
 
     // Export
     document.getElementById('btn-export').addEventListener('click', () => this._export());
+    document.getElementById('btn-copy-swaps').addEventListener('click', () => this._copySwapPlan());
   }
 
   _slider(id, fn) {
@@ -407,6 +415,7 @@ class App {
       textureType:      this.settings.textureType,
       textureIntensity: this.settings.textureIntensity,
       textureScale:     this.settings.textureScale,
+      smoothing:        this.settings.smoothing,
     });
 
     const vertexColors = this._computeVertexColors(filaments);
@@ -418,6 +427,7 @@ class App {
 
     this._updateSwapTable(filaments);
     document.getElementById('btn-export').disabled = false;
+    document.getElementById('btn-copy-swaps').disabled = false;
     document.getElementById('preview-placeholder').style.display = 'none';
   }
 
@@ -524,11 +534,60 @@ class App {
 
   _export() {
     if (!this._heights) return;
+    if (this.settings.fullColor) {
+      const ok = confirm(
+        'Heads up: an STL is height-based — color follows brightness. ' +
+        'A plain STL + height swaps will NOT reproduce the Full-color preview.\n\n' +
+        'For height-swap printing, turn Full-color mode OFF and use "Copy for Bambu".\n\n' +
+        'Export the height-based STL anyway?'
+      );
+      if (!ok) return;
+    }
     const buf = this.meshGen.generate(
       this._heights, this._gridW, this._gridH,
       this.settings.widthMm, this.settings.heightMm,
     );
     this.meshGen.download(buf, 'image3d.stl');
+  }
+
+  // ── Swap plan (copy exact heights + order into Bambu's height-color tool) ─────
+
+  _buildSwapPlan() {
+    const filaments = this.filEditor.get();
+    const totalH = this.settings.baseMm + filaments.reduce((s, f) => s + f.thickness, 0);
+
+    const lines = [
+      'Image to 3D — filament swap plan',
+      `Total height: ${totalH.toFixed(2)} mm · ${filaments.length} filaments (bottom → top)`,
+      '',
+    ];
+
+    let cumZ = 0;
+    filaments.forEach((f, i) => {
+      const startZ     = cumZ;
+      const printThick = i === 0 ? this.settings.baseMm + f.thickness : f.thickness;
+      cumZ += printThick;
+      const where = i === 0 ? 'start 0.00 mm (base)' : `swap at ${startZ.toFixed(2)} mm`;
+      lines.push(`${i + 1}. ${f.name}  ${f.color}  — ${where}`);
+    });
+
+    lines.push('');
+    lines.push('In Bambu: on the right-side height slider, add a filament change at each');
+    lines.push('"swap at" height, assigning colors bottom → top in this order (darkest on top).');
+    return lines.join('\n');
+  }
+
+  async _copySwapPlan() {
+    const btn = document.getElementById('btn-copy-swaps');
+    try {
+      await navigator.clipboard.writeText(this._buildSwapPlan());
+      const prev = btn.textContent;
+      btn.textContent = 'Copied ✓';
+      setTimeout(() => { btn.textContent = prev; }, 1500);
+    } catch {
+      // Clipboard blocked — show the plan so the user can copy manually.
+      window.prompt('Copy the swap plan:', this._buildSwapPlan());
+    }
   }
 }
 
